@@ -1,0 +1,84 @@
+version: "3"
+services:
+
+######################
+###  Auth Service  ###
+######################
+
+  redis:
+    image: redis
+    restart: always
+    ports:
+      - "6380:6379"
+
+  auth-db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: pass
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - ./auth_db/data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+
+  auth-migration:
+    build: 
+      context: ./../auth
+      dockerfile: Dockerfile.migrations
+    environment:
+      NODE_ENV: docker
+    depends_on:
+      - auth-db
+    
+  auth-service:
+    build: ./../auth
+    depends_on:
+      - auth-migration
+      - auth-db
+      - redis
+    ports:
+      - "8888:8888"
+    environment:
+      NODE_ENV: docker
+      SALTS_ROUNDS: 10
+      JWT_SECRET: secret-key
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_EXP: 3600
+
+#######################
+### Backend Service ###
+#######################
+
+  backend-db:
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD: pass
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - ./backend_db/data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+
+  backend-migration:
+    build: 
+      context: ./../backend
+      dockerfile: Dockerfile.migrations
+    environment:
+      NODE_ENV: docker
+    depends_on:
+      - backend-db
+    
+  backend-service:
+    build: ./../backend
+    restart: always
+    depends_on:
+      - backend-migration
+      - backend-db
+    ports:
+      - "7000:7000"
+    environment:
+      NODE_ENV: docker
